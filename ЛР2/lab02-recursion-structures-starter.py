@@ -9,6 +9,7 @@
 Запуск: python lab02-recursion-structures-starter.py --variant N
 """
 from __future__ import annotations
+import matplotlib.pyplot as plt
 
 import argparse
 import collections
@@ -27,58 +28,75 @@ CALLS = {"fib_naive": 0, "fib_memo": 0}  # счётчики рекурсивны
 
 def factorial(n: int) -> int:
     """Факториал n >= 0 рекурсивно. Ожидаемая сложность: TODO (обосновать в отчёте)."""
-    # TODO: базовое условие + рекурсивный переход
-    raise NotImplementedError
-
+    if n == 0:
+        return 1
+    return n * factorial(n - 1)
 
 def fib_naive(n: int) -> int:
     """n-е число Фибоначчи наивной рекурсией; увеличивает CALLS["fib_naive"].
-
     Ожидаемая сложность: TODO (экспоненциальная — показать счётчиком вызовов).
     """
     CALLS["fib_naive"] += 1
     # TODO: F(0)=0, F(1)=1, далее F(n)=F(n-1)+F(n-2)
-    raise NotImplementedError
-
+    if n < 2:
+        return n
+    return fib_naive(n - 1) + fib_naive(n - 2)
 
 def fib_memo(n: int, memo: dict[int, int] | None = None) -> int:
     """n-е число Фибоначчи с мемоизацией; увеличивает CALLS["fib_memo"].
-
     Ожидаемая сложность: TODO (линейная — сравнить счётчики в отчёте).
     """
     CALLS["fib_memo"] += 1
     # TODO: словарь memo передаётся по рекурсии; повторные подзадачи не пересчитываются
-    raise NotImplementedError
+    if memo is None:
+        memo = {}
+    if n in memo:
+        return memo[n]
+    if n < 2:
+        return n
+    memo[n] = fib_memo(n - 1, memo) + fib_memo(n - 2, memo)
+    return memo[n]
 
-
-def hanoi(n: int, src: str = "A", dst: str = "C", aux: str = "B") -> int:
-    """Ханойские башни: вернуть число перемещений n дисков (src -> dst).
-
-    Проверка в self_check: число перемещений равно 2**n - 1.
-    """
-    # TODO: базовое условие n == 0; иначе перенести n-1 на aux, 1 на dst, n-1 на dst
-    raise NotImplementedError
-
-
+hanoimov = []
+def hanoi(n: int, src: str = "A", dst: str = "C", aux: str = "B", 
+          _rods: dict | None = None) -> int:
+    if _rods is None:
+        _rods = {"A": list(range(n, 0, -1)), "B": [], "C": []}
+        global hanoimov
+        hanoimov = []
+    if n == 0:
+        return 0
+    #Перенос n-1 дисков на вспомогательный
+    moves = hanoi(n - 1, src, aux, dst, _rods)
+    #Перенос самого большого доступного диска с проверкой
+    if not _rods[src]:
+        raise ValueError("Вы пытаетесь взять диск с пустого стержня")
+    disk = _rods[src].pop()
+    if _rods[dst] and _rods[dst][-1] < disk:
+        raise ValueError("Вы пытаетесь положить большой диск на маленький")
+    _rods[dst].append(disk)
+    hanoimov.append((src, dst)) # Запись перемещения
+    
+    #Перенос n-1 дисков на целевой
+    moves += 1 + hanoi(n - 1, aux, dst, src, _rods)
+    return moves
 # ---------------------------------------------------------------------------
 # 2. Динамический массив с ручным управлением ёмкостью (рост x2)
 # ---------------------------------------------------------------------------
 
-
 class DynamicArray:
     """Динамический массив поверх «сырого» буфера фиксированной ёмкости.
-
     Инвариант: 0 <= self._size <= self._capacity.
     Буфер имитируем списком фиксированной длины, заполненным None;
     использовать list.append/insert для буфера запрещено.
     """
-
     INITIAL_CAPACITY = 4
 
     def __init__(self) -> None:
         self._capacity = self.INITIAL_CAPACITY
         self._size = 0
         self._buffer: list = [None] * self._capacity  # «сырая» память
+        self.copies = 0
 
     def __len__(self) -> int:
         return self._size
@@ -90,25 +108,46 @@ class DynamicArray:
     def _grow(self) -> None:
         """Увеличить ёмкость в 2 раза и скопировать элементы в новый буфер."""
         # TODO: выделить новый буфер размера 2 * capacity, перенести _size элементов
-        raise NotImplementedError
+        new_capacity = self._capacity * 2
+        new_buffer = [None] * new_capacity
+        for i in range(self._size):
+            new_buffer[i] = self._buffer[i]
+            self.copies += 1  
+        self._buffer = new_buffer
+        self._capacity = new_capacity
 
     def append(self, value) -> None:
         """Добавить элемент в конец; при size == capacity сначала вызвать _grow.
-
         Амортизированная сложность: TODO (обосновать методом учёта в отчёте).
         """
         # TODO: рост при необходимости, запись в ячейку _buffer[_size], инкремент _size
-        raise NotImplementedError
+        if self._size == self._capacity:
+            self._grow()
+        self._buffer[self._size] = value
+        self._size += 1
+
+    def pop(self):
+        """Удалить и вернуть последний элемент. Сложность: O(1)."""
+        if self._size == 0:
+            raise IndexError("pop из пустого массива")
+        self._size -= 1
+        value = self._buffer[self._size]
+        self._buffer[self._size] = None
+        return value
 
     def get(self, index: int):
         """Вернуть элемент по индексу 0 <= index < size; иначе IndexError."""
         # TODO: проверка границ + чтение из буфера
-        raise NotImplementedError
+        if index < 0 or index >= self._size:
+            raise IndexError("Индекс выходит за границы")
+        return self._buffer[index]
 
     def set(self, index: int, value) -> None:
         """Записать элемент по индексу 0 <= index < size; иначе IndexError."""
         # TODO: проверка границ + запись в буфер
-        raise NotImplementedError
+        if index < 0 or index >= self._size:
+            raise IndexError("Индекс выходит за границы")
+        self._buffer[index] = value
 
 
 # ---------------------------------------------------------------------------
@@ -128,22 +167,22 @@ class Stack:
     def push(self, value) -> None:
         """Положить элемент на вершину. Амортизированная сложность: TODO."""
         # TODO: делегировать DynamicArray.append
-        raise NotImplementedError
+        self._data.append(value)
 
     def pop(self):
         """Снять элемент с вершины; для пустого стека — IndexError."""
         # TODO: прочитать последний элемент, уменьшить размер
-        raise NotImplementedError
+        return self._data.pop()
 
     def peek(self):
         """Вернуть вершину без удаления; для пустого стека — IndexError."""
-        # TODO
-        raise NotImplementedError
+        if len(self._data) == 0:
+            raise IndexError("peek из пустого стекк")
+        return self._data.get(len(self._data) - 1)
 
 
 class _Node:
     """Узел двусвязного списка для Deque."""
-
     __slots__ = ("value", "prev", "next")
 
     def __init__(self, value, prev=None, next=None) -> None:  # noqa: A002
@@ -154,7 +193,6 @@ class _Node:
 
 class Deque:
     """Дек (двусторонняя очередь) на базе двусвязного списка.
-
     Все четыре операции концов должны стоить O(1) — без амортизации,
     в отличие от вставки в начало динамического массива (см. отчёт).
     """
@@ -170,22 +208,54 @@ class Deque:
     def push_front(self, value) -> None:
         """Добавить элемент в начало. Сложность: TODO."""
         # TODO: создать узел, перевязать ссылки head (учесть пустой дек)
-        raise NotImplementedError
+        new_node = _Node(value)
+        if self._size == 0:
+            self._head = self._tail = new_node
+        else:
+            new_node.next = self._head
+            self._head.prev = new_node
+            self._head = new_node
+        self._size += 1
+
 
     def push_back(self, value) -> None:
         """Добавить элемент в конец. Сложность: TODO."""
         # TODO: симметрично push_front для tail
-        raise NotImplementedError
+        new_node = _Node(value)
+        if self._size == 0:
+            self._head = self._tail = new_node
+        else:
+            new_node.prev = self._tail
+            self._tail.next = new_node
+            self._tail = new_node
+        self._size += 1
 
     def pop_front(self):
         """Извлечь элемент из начала; для пустого дека — IndexError."""
         # TODO: учесть переход к пустому деку (tail тоже обнуляется)
-        raise NotImplementedError
+        if self._size == 0:
+            raise IndexError("pop из пустого дека")
+        value = self._head.value
+        self._head = self._head.next
+        if self._head is None:
+            self._tail = None  # tail обнуляется
+        else:
+            self._head.prev = None
+        self._size -= 1
+        return value
 
     def pop_back(self):
         """Извлечь элемент из конца; для пустого дека — IndexError."""
-        # TODO
-        raise NotImplementedError
+        if self._size == 0:
+            raise IndexError("pop из пустого дека")
+        value = self._tail.value
+        self._tail = self._tail.prev
+        if self._tail is None:
+            self._head = None
+        else:
+            self._tail.next = None
+        self._size -= 1
+        return value
 
 
 # ---------------------------------------------------------------------------
@@ -288,21 +358,49 @@ def inserts_front_deque(n: int) -> None:
         d.appendleft(i)
 
 
+def inserts_front_custom_deque(n: int) -> None:
+    """n вставок в начало нашего Deque — ожидаемо O(1) на операцию."""
+    d: Deque = Deque()
+    for i in range(n):
+        d.push_front(i)
+
 def run_benchmarks(seed: int) -> None:
     """Средняя стоимость append и сравнение вставки в начало list/deque."""
     rng = random.Random(seed)
-    _ = rng.random()  # данные варианта фиксируются seed (см. reproducibility.md)
+    _ = rng.random()
+    
+    #Сбор данных для графика и консоли
     print("\nСредняя стоимость append (DynamicArray), демонстрация амортизированной O(1):")
-    for n in SIZES:
+    sizes_for_graph = [1_000, 5_000, 10_000, 50_000, 100_000]
+    avg_costs = []
+    
+    for n in sizes_for_graph:
         t = bench(appends_dynamic_array, n)
-        print(f"  n={n:>7}  всего t={t:.6f} c  на операцию t/n={t / n:.3e} c")
-    print("\nВставка в начало: list.insert(0, x) против deque.appendleft:")
+        cost_per_op = t / n
+        avg_costs.append(cost_per_op)
+        print(f"  n={n:>7}  всего t={t:.6f} c  на операцию t/n={cost_per_op:.3e} c")
+        
+    #Замеры вставки в начало
+    print("\nВставка в начало: list.insert(0, x) против deque.appendleft и Deque.push_front:")
     for n in SIZES:
         if n > 30_000:
             continue  # вставка в начало list квадратична по суммарному времени
         t_list = bench(inserts_front_list, n)
         t_deque = bench(inserts_front_deque, n)
-        print(f"  n={n:>7}  list={t_list:.6f} c  deque={t_deque:.6f} c")
+        t_custom = bench(inserts_front_custom_deque, n)
+        print(f"  n={n:>7}  list={t_list:.6f} c  std_deque={t_deque:.6f} c  custom_deque={t_custom:.6f} c")
+
+    #Построение графика
+    print("\nПостроение графика...")
+    plt.figure(figsize=(8, 5))
+    plt.plot(sizes_for_graph, avg_costs, marker='o', linestyle='-', color='b', linewidth=2)
+    plt.title("Амортизированная стоимость append (t/n от n)")
+    plt.xlabel("Размер массива (n)")
+    plt.ylabel("Время на одну операцию (t/n), сек")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("append_graph.png", dpi=300)
+    print("График успешно сохранен")
     # TODO: снять аналогичные замеры для push_front своего Deque;
     # TODO: построить график t/n от n для append и включить его в отчёт;
     # TODO: провести амортизированный анализ push_back методом учёта (в отчёте).
